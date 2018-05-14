@@ -1,0 +1,218 @@
+---
+title: "Practical Machine Learning Project"
+author: "Sam Mengistu"
+date: "May 14, 2018"
+output: html_document
+
+---
+
+# Practical Machine Learning - Peer Assessment 
+
+### 1. **Data Overview**
+
+Three machine learning algorithms were implemented to predict "how well" people perform weight lifting activities using accelerometer acquired data sets. The accelerometers were placed on the belt, forearm, arm, and dumbbell of six male health participants during weight lifting exercises using a relatively light dumbbell (1.25kg). The participants were between 20-28 years old and had little weight lifting experience. 
+
+The six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). Various variables pertinent to this analysis were collected and made available as training and testing datasets.
+
+Training data sets are available [here](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv) while testing data set can be found [here](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv). Additional details about the project data can be also found [here](http://groupware.les.inf.puc-rio.br/har). 
+
+
+### 2. **Objective**
+The objective of this analysis was to predict the quality of weight lifting activities by six wearers of accelerometer with little weight lifting experience using data sets acquired by accelerometers placed at different locations.
+
+### 3. **Installing Required Packages and Libraries**
+The following packages and libraries may be required to perform data preprocessing and model building.
+
+```{r, message=FALSE, warning = FALSE, cache=FALSE}
+library(caret)
+library(randomForest)
+library(corrplot)
+library(rpart)
+library(RColorBrewer)
+library(rattle)
+library(htmltools)
+```
+
+### 4.	**Data Acquisition and Preprocessing**
+### 4.1.	 *Downloading data*
+The training and testing datasets were downloaded from the links provided above. A working directory was set first inside which a folder named "PRassignment" was created to store the downloaded datasets. 
+
+
+```{r}
+setwd("/home/gis/EPA/GitHub/TSTools/ML/PracticalMachineLearning")
+```
+
+```{r}
+# creating a new project directory 
+if (!file.exists("./Assignment_Data")) {
+dir.create("./Assignment_Data")
+}
+```
+
+```{r}
+# downloading training and testing datasets
+trainUrl <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(trainUrl, destfile ="./Assignment_Data/trainingData.csv")
+download.file(testUrl, destfile ="./Assignment_Data/testingData.csv")
+```
+
+
+### *4.2.	Loading data*
+Downloaded datasets (both of them in a .csv format) were then loaded to R environment for subsequent preprocessing and analysis.
+
+```{r}
+# loading training and testing datasets
+trainData <- read.csv("./Assignment_Data/trainingData.csv", header =T, sep=",",na.strings=c("NA",""))
+testData <- read.csv("./Assignment_Data/testingData.csv", header =T, sep=",", na.strings=c("NA",""))
+```
+
+### *4.3.	Cleaning data* 
+Data cleaning may include removing unwanted features (columns) from the datasets, identifying less variable or less meaningful predictors, and dealing with NA values, including imputing missing data. First, unwanted variable columns were removed from both the training and testing datasets followed by variables with close to zero variance. It is always difficult to deal with missing data. The question of how many missing values is enough to keep or remove the variable for subsequent modeling analysis is dependent on a several factors. In this exercise, the columns with more than 60 percent missing values were dropped while imputation was planned for variables with less than 60 percent missing observations to avoid problems in training models. 
+
+```{r}
+# removing unwanted variable or feature columns
+unwanted.cols <-c("X", "user_name","raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp","num_window")
+wanted.cols<-!names(trainData)%in%unwanted.cols
+training.data<- trainData [, wanted.cols]
+testing.data<- testData[, wanted.cols]
+```
+
+```{r}
+# removing unimportant predictors or variables
+nsv <- nearZeroVar(training.data,saveMetrics=TRUE)
+training.data.nzv <- training.data[,!nsv$nzv]
+testing.data.nzv <- testing.data[,!nsv$nzv]
+```
+
+```{r}
+# removing variables with more than 60% NA values
+na.lessthan60p <- which(colSums(is.na(training.data.nzv))<0.6*nrow(training.data.nzv))
+training.data.nzvCln<-  training.data.nzv[ ,na.lessthan60p]
+testing.data.nzvCln <- testing.data.nzv [,na.lessthan60p]
+testing <- testing.data.nzvCln
+```
+
+### *4.4.	Partitioning data*
+After cleaning, the downloaded training dataset was partitioned in two categories to create a training set (70% of the data) for model training and a validating set (with the remaining 30%) for model validation. The trained model, after being validated, was used for prediction using cleaned testing dataset.
+
+```{r}
+# partitioning data to training and validating datasets
+inTrain = createDataPartition(training.data.nzvCln$classe, p=0.70, list=FALSE)   
+training = training.data.nzvCln[inTrain,]
+validating = training.data.nzvCln[-inTrain,]
+```
+
+No NA values in all the datasets suggesting no requirement of imputation.
+```{r}
+sum(colSums(is.na(training)))
+```
+```{r}
+sum(colSums(is.na(validating)))
+```
+```{r}
+sum(colSums(is.na(testing)))
+```
+
+
+### **5.	Correlation Analysis**
+The training data with the exclusion of the classe feature was subjected to correlation analysis to evaluate how predictor variables are correlated to each other. The correlation graph is separately uploaded to limit the size of this HTML document below 1MB, beyond which rendered HTML files can only be viewed as raw HTML even if the file is pusehd to the gh-pages branch. To come up with more compact predictors, the data can be also subjected to a Principal Component Analysis (PCA) based pre-processing. According to the correlation plot, fewer variables with higher correlations are observed, therefore, the PCA based preprocessing has been skipped for this exercise.
+
+```{r, results="hide", echo=TRUE}
+# performing correlation analysiimage_file
+#   corAnalysis <- cor(training [, -53]) 
+#   corplot<-corrplot(corAnalysis, order = "hclust", method = "circle", type = "lower",  
+#   tl.cex = 0.52, cl.cex = 1, col=brewer.pal(n=8, name="RdYlBu"), tl.col="black")
+```
+
+### **6.	Modeling**
+Three machine learning algorithms were applied to generate models that fit to the training dataset. These include Random Forests, Decision Tree and Generalized Boosted Model. A seed value was declared (set.seed(1345)) to aid reproducibility of analysis outcomes. The fitted models were then tested on validating and testing datasets. A Confusion Metrix between the observed and predicted classe values for the validating data sets was revealed at the end of each analysis to aid better visualization of the accuracy of modeling results. 
+
+
+### *6.1.	Random Forest*
+```{r, cache=TRUE}
+set.seed(1345)
+# model training
+rfMod.fit <- train(classe ~ ., method = "rf", data = training, importance = T, trControl = trainControl(method = "cv", number = 4))
+rfMod.fit
+```
+
+```{r}
+# model validation
+rfValid.pred <- predict(rfMod.fit, newdata=validating)
+
+confusionMatrix(rfValid.pred,validating$classe)
+```
+
+
+### *6.2.	Decision Tree*
+```{r, cache=TRUE}
+# model training
+dtreeCtrl <- trainControl(method = "repeatedcv", number = 10, repeats = 4)
+set.seed(1345)
+rpartMod.fit <- train(classe ~ ., method = "rpart", data = training,  trControl=dtreeCtrl, tuneLength = 10, parms=list(split='information'))
+
+rpartMod.fit
+```
+
+```{r}
+# model validation
+rpartValid.pred <- predict(rpartMod.fit, newdata=validating)
+confusionMatrix(rpartValid.pred,validating$classe)
+```
+
+### *6.3.	Generalized Boosted Model*
+```{r, cache=TRUE}
+# model training
+set.seed(1345)
+controlGBM <- trainControl(method = "repeatedcv", number = 10, repeats = 4)
+gbmMod.fit <- train(classe~., data=training, method = "gbm", trControl = controlGBM, verbose = FALSE)
+
+gbmMod.fit
+```
+
+```{r}
+# model validation
+gbmValid.pred <- predict(gbmMod.fit, newdata=validating)
+
+confusionMatrix(gbmValid.pred,validating$classe)
+```
+
+### *6.4.	Model selection*
+Both Random Forest (RF) and Generalized Boosted Models (GBM) algorithms provided high accuracy.  The result tables above show model generated accuracies of 0.99, 0.96 and 0.67 for RF, GBM and Decision Tree (DT) models. 
+
+```{r}
+# model testing
+rfTest.pred <- predict(rfMod.fit, newdata=testing)
+
+rfTest.pred
+```
+
+In addition, RF and GBM models provided the same prediction of the classe features in test data (see the tables below).
+
+```{r}
+# comparison of RF and GBM predictions of testing data
+
+gbmTest.pred <- predict(gbmMod.fit, newdata=testing)
+
+table(rfTest.pred, gbmTest.pred)
+```
+
+
+Because the accuracy of RF model was slightly higher, RF was chosen as a predictive model. The top three important variables for the RF based predictive model include 'yaw_belt', pitch_belt', and 'roll_belt'. Figure 2 below summarized the importance of predictor variables graphically.
+
+```{r fig.cap = "Figure 1: Importance of predictor variables"}
+# importance of variables
+varImpPlot(rfMod.fit$finalModel, sort = TRUE, type = 1, pch = 19, col = 'blue', cex = 0.8, main = " ")
+```
+
+### 7.	Summary
+The study involved three machine learning approaches to predict how well people perform weight lifting activities from accelerometer acquired data sets. The three models were subjected to same datasets that were cleaned and preprocessed during this investigation. Random Forest provided the best model with a slight difference from Generalized Boosted Model in terms of accuracy, thus used for prediction. 
+
+
+
+**References:**
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+
